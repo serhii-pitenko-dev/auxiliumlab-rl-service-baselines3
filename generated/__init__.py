@@ -1,0 +1,2 @@
+# Generated gRPC code will be placed here
+# Run: python -m grpc_tools.protoc -I./proto --python_out=./generated --grpc_python_out=./generated proto/policy_trainer.proto

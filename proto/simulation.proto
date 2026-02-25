@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package simulation;
+
+// Service for external simulation environment control
+service SimulationService {
+  // Reset the simulation environment
+  rpc Reset(ResetRequest) returns (ResetResponse);
+  
+  // Execute a single step in the simulation
+  rpc Step(StepRequest) returns (StepResponse);
+  
+  // Close/cleanup the simulation
+  rpc Close(CloseRequest) returns (CloseResponse);
+}
+
+// Request message for resetting the environment
+message ResetRequest {
+  string gym_id = 1;  // Unique gym identifier (UUID string)
+  int32 seed = 2;     // Optional seed for deterministic resets
+}
+
+// Response message containing initial observation
+message ResetResponse {
+  repeated float observation = 1;  // Initial state observation
+  map<string, string> info = 2;    // Additional info (optional)
+}
+
+// Request message for taking an action
+message StepRequest {
+  string gym_id = 1;  // Unique gym identifier (UUID string)
+  int32 action = 2;   // Action to execute
+}
+
+// Response message for step result
+message StepResponse {
+  repeated float observation = 1;  // New state observation
+  float reward = 2;                // Reward received
+  bool terminated = 3;             // Episode terminated (goal/fail)
+  bool truncated = 4;              // Episode truncated (time limit)
+  map<string, string> info = 5;    // Additional info (optional)
+}
+
+// Request message for closing the environment
+message CloseRequest {
+  string gym_id = 1;  // Unique gym identifier (UUID string)
+}
+
+// Response message for close confirmation
+message CloseResponse {
+  bool success = 1;
+  string message = 2;
+}

@@ -1,6 +1,217 @@
 # AISandbox RL Training Service
 
-A production-ready gRPC service for training Reinforcement Learning agents using Stable Baselines3. Supports PPO, A2C, and DQN algorithms with external environment integration.
+A **gRPC service** for training Reinforcement Learning agents using **Stable Baselines3**. Supports PPO, A2C, and DQN algorithms. Integrates bidirectionally with the .NET `AuxiliumLab.AiSandbox` simulation engine.
+
+## Role in the System
+
+```
+.NET AuxiliumLab.AiSandbox
+  AiTrainingOrchestrator
+    PolicyTrainerClient  ──── gRPC :50051 ────►  This Python service
+                                                    TrainingOrchestrator
+                                                      ExternalSimEnv
+                                                        GrpcExternalEnvAdapter
+                                                          └─── gRPC :50062 ────►  .NET GrpcHost
+                                                                                      SimulationService
+                                                                                       (gym reset/step)
+```
+
+- **.NET → Python (port 50051):** .NET calls `StartTrainingPPO/A2C/DQN`, `GetTrainingStatus`, `Act`.
+- **Python → .NET (port 50062):** Python gym calls `reset` and `step` on the C# simulation during training.
+
+## Architecture
+
+```
+auxilium_rl/
+├── transport/          gRPC server layer
+│   ├── grpc_server.py      Server factory and startup
+│   ├── trainer_servicer.py gRPC handler for PolicyTrainerService RPCs
+│   └── health_servicer.py  gRPC health check protocol
+├── core/               Business logic (no transport concerns)
+│   ├── training.py         TrainingOrchestrator + CheckpointCallback
+│   ├── algorithms.py       SB3 model factory (PPO / A2C / DQN)
+│   ├── env.py              ExternalSimEnv (gymnasium.Env wrapper)
+│   └── dto.py              TrainingConfig, RunInfo, RunStatus, AlgorithmType
+└── infra/              Infrastructure
+    ├── config.py           ServiceConfig and EnvConfig (from environment variables)
+    ├── external_env_adapter.py  ExternalEnvAdapter ABC + FakeAdapter + GrpcAdapter
+    ├── model_store.py      Model/checkpoint save & load (zip format)
+    └── logging.py          Logging setup
+```
+
+## Key Components
+
+### `TrainingOrchestrator` (`core/training.py`)
+Thread-safe manager for multiple concurrent training runs.
+- `start_training(config, adapter_factory)` — starts training in a background thread, returns `run_id`.
+- `get_run_status(run_id)` — returns `RunInfo` (timesteps done, status, last checkpoint path).
+- `get_model(run_id)` — returns the trained `BaseAlgorithm` for inference.
+
+Training uses `CheckpointCallback` to save intermediate checkpoints every `checkpoint_freq` steps (default 10 000).
+
+### `ExternalSimEnv` (`core/env.py`)
+Standard `gymnasium.Env` that delegates all `reset()` / `step()` calls to an `ExternalEnvAdapter`.
+
+| Space | Type | Default shape |
+|---|---|---|
+| `observation_space` | `Box(−∞, +∞)` | `(4,)` — position + stats |
+| `action_space` | `Discrete` | `4` — Move N/S/E/W (or 0…3) |
+
+`max_steps` controls episode truncation (default 500).
+
+### `ExternalEnvAdapter` (`infra/external_env_adapter.py`)
+Adapter interface between the gym and the simulation backend.
+
+| Implementation | Used when |
+|---|---|
+| `FakeExternalEnvAdapter` | Unit tests and local development without a .NET process |
+| `GrpcExternalEnvAdapter` | Production training against the live .NET `GrpcHost` (:50062) |
+
+The adapter factory is passed to `create_server` and a new adapter instance is created per training run.
+
+### `ModelStore` (`infra/model_store.py`)
+Handles model persistence:
+- `save_model(model, run_id)` — saves to `{models_dir}/{run_id}/final.zip`.
+- `save_checkpoint(model, run_id, step)` — saves to `{checkpoint_dir}/{run_id}/step_{step}.zip`.
+- `load_model(run_id, algorithm)` — loads and returns the model; requires the algorithm type for correct class instantiation.
+
+### `trainer_servicer.py` (Transport)
+Implements `PolicyTrainerServiceServicer`:
+
+| RPC | Handler |
+|---|---|
+| `StartTrainingPPO` | Starts PPO run via `TrainingOrchestrator` |
+| `StartTrainingA2C` | Starts A2C run |
+| `StartTrainingDQN` | Starts DQN run |
+| `GetTrainingStatus` | Returns progress from run registry |
+| `Act` | Loads model and runs `model.predict(observation)` |
+
+## Setup
+
+### 1. Create Virtual Environment
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+### 2. Install Dependencies
+```powershell
+pip install -r requirements.txt
+```
+
+### 3. Generate gRPC Code (if proto changed)
+```powershell
+python -m grpc_tools.protoc `
+  -I./proto `
+  --python_out=./generated `
+  --grpc_python_out=./generated `
+  proto/policy_trainer.proto
+```
+Or use the helper script:
+```powershell
+.\scripts\generate_all_grpc.ps1
+```
+
+## Running
+
+```powershell
+python server.py        # starts gRPC server on :50051
+```
+
+### Environment Variables
+| Variable | Default | Description |
+|---|---|---|
+| `GRPC_HOST` | `0.0.0.0` | Bind address |
+| `GRPC_PORT` | `50051` | Listen port |
+| `MODELS_DIR` | `./trained_models` | Final model storage |
+| `CHECKPOINT_DIR` | `./checkpoints` | Checkpoint storage |
+| `LOG_LEVEL` | `INFO` | Logging verbosity |
+| `OBSERVATION_DIM` | `4` | Observation vector size |
+| `ACTION_DIM` | `4` | Number of discrete actions |
+| `MAX_STEPS` | `500` | Max steps per episode |
+
+## Testing
+
+```powershell
+pytest                                         # all tests
+pytest tests/test_algorithms.py -v            # algorithm factory
+pytest tests/test_env_wrapper.py -v           # gym environment
+pytest tests/test_grpc_training_smoke.py -v   # end-to-end smoke
+pytest tests/test_health_check.py -v          # health check protocol
+```
+
+## API Usage
+
+### Start Training (PPO example)
+```python
+import grpc
+from generated import policy_trainer_pb2, policy_trainer_pb2_grpc
+
+channel = grpc.insecure_channel('localhost:50051')
+stub = policy_trainer_pb2_grpc.PolicyTrainerServiceStub(channel)
+
+response = stub.StartTrainingPPO(policy_trainer_pb2.TrainingRequest(
+    experiment_id="run_001",
+    total_timesteps=100_000,
+    seed=42,
+    hyperparameters={"learning_rate": "3e-4", "n_steps": "2048"},
+    model_output_path="./trained_models/run_001.zip"
+))
+run_id = response.run_id
+```
+
+### Poll Status
+```python
+status = stub.GetTrainingStatus(policy_trainer_pb2.StatusRequest(run_id=run_id))
+print(f"Steps done: {status.timesteps_done} | Done: {status.is_done}")
+```
+
+### Inference
+```python
+act = stub.Act(policy_trainer_pb2.ActRequest(
+    run_id=run_id,
+    observation=[0.1, 0.2, 0.3, 0.4]
+))
+print(f"Action: {act.action}")
+```
+
+## Default Hyperparameters
+
+| Algorithm | Key defaults |
+|---|---|
+| PPO | `learning_rate=3e-4`, `n_steps=2048`, `batch_size=64`, `n_epochs=10`, `gamma=0.99` |
+| A2C | `learning_rate=7e-4`, `n_steps=5`, `gamma=0.99`, `vf_coef=0.5` |
+| DQN | `learning_rate=1e-4`, `buffer_size=50000`, `batch_size=32`, `gamma=0.99` |
+
+Override any value via the `hyperparameters` map in `TrainingRequest`.
+
+## Proto Files
+
+```
+proto/
+├── policy_trainer.proto  .NET → Python: start training, get status, act
+└── simulation.proto      Python → .NET: gym reset / step / close  (shared with GrpcHost)
+```
+
+The generated stubs in `generated/` are auto-generated and should not be edited manually.
+
+## Adding a New Algorithm
+1. Add a new value to the `AlgorithmType` enum in `core/dto.py`.
+2. Add the SB3 import and a branch in `build_model()` in `core/algorithms.py`.
+3. Add a corresponding `StartTrainingXxx` RPC to `proto/policy_trainer.proto`.
+4. Regenerate stubs and add a handler in `transport/trainer_servicer.py`.
+5. Add the RPC implementation to `IPolicyTrainerClient` in the .NET `AiTrainingOrchestrator`.
+
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| `ModuleNotFoundError: No module named 'generated'` | Run protoc command; ensure `generated/__init__.py` exists |
+| `gRPC Connection refused :50051` | Start `python server.py` first |
+| `gRPC Connection refused :50062` | Start the .NET GrpcHost (Training mode) first |
+| Training too slow | Reduce `total_timesteps`; check `max_steps` per episode |
+| `LOG_LEVEL=DEBUG` | Set env var for verbose output |
+
 
 ## Features
 

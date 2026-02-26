@@ -6,6 +6,7 @@ import uuid
 from pathlib import Path
 
 from stable_baselines3.common.callbacks import BaseCallback, CallbackList
+from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.base_class import BaseAlgorithm
 import numpy as np
 
@@ -13,7 +14,7 @@ from .dto import TrainingConfig, RunInfo, RunStatus
 from .algorithms import build_model, get_model_class
 from .env import ExternalSimEnv
 from ..infra.model_store import ModelStore
-from ..infra.external_env_adapter import ExternalEnvAdapter, FakeExternalEnvAdapter
+from ..infra.external_env_adapter import ExternalEnvAdapter, FakeExternalEnvAdapter, GrpcExternalEnvAdapter
 from ..infra.config import EnvConfig
 
 logger = logging.getLogger(__name__)
@@ -147,20 +148,50 @@ class TrainingOrchestrator:
             with self.registry_lock:
                 self.run_registry[run_id].status = RunStatus.RUNNING
             
-            # Create adapter if not provided
-            if adapter is None:
-                adapter = FakeExternalEnvAdapter(
-                    observation_dim=self.env_config.observation_dim,
-                    action_dim=self.env_config.action_dim
+            # Build the environment.
+            # If .NET passed gym_ids in hyperparameters, create one adapter per gym;
+            # for multiple gyms wrap them in a DummyVecEnv so SB3 can exploit
+            # parallelism.  If no gym_ids are provided fall back to the fake adapter.
+            obs_dim = self.env_config.observation_dim
+            act_dim = self.env_config.action_dim
+            max_steps = self.env_config.max_steps
+
+            gym_ids_str = config.hyperparameters.get("gym_ids", "")
+            gym_ids = [g for g in gym_ids_str.split(";") if g]
+
+            if len(gym_ids) > 1:
+                # Multiple gyms — use the vectorised wrapper
+                def _make_env(gid: str):
+                    def _init():
+                        a = GrpcExternalEnvAdapter("localhost:50062", gym_id=gid)
+                        return ExternalSimEnv(
+                            adapter=a,
+                            observation_dim=obs_dim,
+                            action_dim=act_dim,
+                            max_steps=max_steps
+                        )
+                    return _init
+                env = DummyVecEnv([_make_env(gid) for gid in gym_ids])
+                logger.info(f"[{run_id}] Created DummyVecEnv with {len(gym_ids)} gym(s)")
+            else:
+                # Single gym — use the adapter provided by the servicer (already has
+                # the correct gym_id) or a fresh real/fake adapter.
+                if adapter is None:
+                    if gym_ids:
+                        adapter = GrpcExternalEnvAdapter("localhost:50062", gym_id=gym_ids[0])
+                        logger.info(f"[{run_id}] Created single adapter for gym_id={gym_ids[0]}")
+                    else:
+                        adapter = FakeExternalEnvAdapter(
+                            observation_dim=obs_dim,
+                            action_dim=act_dim
+                        )
+                        logger.info(f"[{run_id}] No gym_ids found — using FakeExternalEnvAdapter")
+                env = ExternalSimEnv(
+                    adapter=adapter,
+                    observation_dim=obs_dim,
+                    action_dim=act_dim,
+                    max_steps=max_steps
                 )
-            
-            # Create environment
-            env = ExternalSimEnv(
-                adapter=adapter,
-                observation_dim=self.env_config.observation_dim,
-                action_dim=self.env_config.action_dim,
-                max_steps=self.env_config.max_steps
-            )
             
             # Build model
             hyperparams = config.get_hyperparams_typed()

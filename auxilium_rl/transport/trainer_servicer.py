@@ -19,14 +19,16 @@ class PolicyTrainerServicer(policy_trainer_pb2_grpc.PolicyTrainerServiceServicer
     def __init__(
         self,
         orchestrator: TrainingOrchestrator,
-        adapter_factory: Optional[Callable[[], ExternalEnvAdapter]] = None
+        adapter_factory: Optional[Callable[[str], ExternalEnvAdapter]] = None
     ):
         """
         Initialize the servicer.
         
         Args:
             orchestrator: Training orchestrator
-            adapter_factory: Optional factory function to create external adapters
+            adapter_factory: Optional factory function (gym_id: str) -> ExternalEnvAdapter.
+                             Receives the gym UUID string from the .NET side so gRPC
+                             requests are routed to the correct Sb3Actions instance.
         """
         self.orchestrator = orchestrator
         self.adapter_factory = adapter_factory
@@ -87,10 +89,22 @@ class PolicyTrainerServicer(policy_trainer_pb2_grpc.PolicyTrainerServiceServicer
                 model_output_path=request.model_output_path
             )
             
-            # Create adapter if factory is provided
+            # Create adapter if factory is provided.
+            # Extract the first gym_id from hyperparameters and pass it to the factory
+            # so gRPC Reset/Step/Close calls carry the correct GymId recognised by .NET.
             adapter = None
             if self.adapter_factory:
-                adapter = self.adapter_factory()
+                gym_ids_str = config.hyperparameters.get("gym_ids", "")
+                gym_ids = [g for g in gym_ids_str.split(";") if g]
+                gym_id = gym_ids[0] if gym_ids else ""
+                if not gym_id:
+                    logger.warning(
+                        "No gym_ids found in hyperparameters. "
+                        "gRPC calls will use an empty gym_id and .NET will ignore them. "
+                        "Ensure the .NET orchestrator sends 'gym_ids' in hyperparameters."
+                    )
+                adapter = self.adapter_factory(gym_id)
+                logger.info(f"Created adapter for gym_id={gym_id}")
             
             # Start training
             run_id = self.orchestrator.start_training(config, adapter)

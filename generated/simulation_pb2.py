@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10simulation.proto\x12\nsimulation\"\x1c\n\x0cResetRequest\x12\x0c\n\x04seed\x18\x01 \x01(\x05\"\x84\x01\n\rResetResponse\x12\x13\n\x0bobservation\x18\x01 \x03(\x02\x12\x31\n\x04info\x18\x02 \x03(\x0b\x32#.simulation.ResetResponse.InfoEntry\x1a+\n\tInfoEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\x1d\n\x0bStepRequest\x12\x0e\n\x06\x61\x63tion\x18\x01 \x01(\x05\"\xb9\x01\n\x0cStepResponse\x12\x13\n\x0bobservation\x18\x01 \x03(\x02\x12\x0e\n\x06reward\x18\x02 \x01(\x02\x12\x12\n\nterminated\x18\x03 \x01(\x08\x12\x11\n\ttruncated\x18\x04 \x01(\x08\x12\x30\n\x04info\x18\x05 \x03(\x0b\x32\".simulation.StepResponse.InfoEntry\x1a+\n\tInfoEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\x0e\n\x0c\x43loseRequest\"1\n\rCloseResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t2\xca\x01\n\x11SimulationService\x12<\n\x05Reset\x12\x18.simulation.ResetRequest\x1a\x19.simulation.ResetResponse\x12\x39\n\x04Step\x12\x17.simulation.StepRequest\x1a\x18.simulation.StepResponse\x12<\n\x05\x43lose\x12\x18.simulation.CloseRequest\x1a\x19.simulation.CloseResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10simulation.proto\x12\nsimulation\",\n\x0cResetRequest\x12\x0e\n\x06gym_id\x18\x01 \x01(\t\x12\x0c\n\x04seed\x18\x02 \x01(\x05\"\x84\x01\n\rResetResponse\x12\x13\n\x0bobservation\x18\x01 \x03(\x02\x12\x31\n\x04info\x18\x02 \x03(\x0b\x32#.simulation.ResetResponse.InfoEntry\x1a+\n\tInfoEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"-\n\x0bStepRequest\x12\x0e\n\x06gym_id\x18\x01 \x01(\t\x12\x0e\n\x06\x61\x63tion\x18\x02 \x01(\x05\"\xb9\x01\n\x0cStepResponse\x12\x13\n\x0bobservation\x18\x01 \x03(\x02\x12\x0e\n\x06reward\x18\x02 \x01(\x02\x12\x12\n\nterminated\x18\x03 \x01(\x08\x12\x11\n\ttruncated\x18\x04 \x01(\x08\x12\x30\n\x04info\x18\x05 \x03(\x0b\x32\".simulation.StepResponse.InfoEntry\x1a+\n\tInfoEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\x1e\n\x0c\x43loseRequest\x12\x0e\n\x06gym_id\x18\x01 \x01(\t\"1\n\rCloseResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t2\xca\x01\n\x11SimulationService\x12<\n\x05Reset\x12\x18.simulation.ResetRequest\x1a\x19.simulation.ResetResponse\x12\x39\n\x04Step\x12\x17.simulation.StepRequest\x1a\x18.simulation.StepResponse\x12<\n\x05\x43lose\x12\x18.simulation.CloseRequest\x1a\x19.simulation.CloseResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -36,21 +36,21 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_STEPRESPONSE_INFOENTRY']._loaded_options = None
   _globals['_STEPRESPONSE_INFOENTRY']._serialized_options = b'8\001'
   _globals['_RESETREQUEST']._serialized_start=32
-  _globals['_RESETREQUEST']._serialized_end=60
-  _globals['_RESETRESPONSE']._serialized_start=63
-  _globals['_RESETRESPONSE']._serialized_end=195
-  _globals['_RESETRESPONSE_INFOENTRY']._serialized_start=152
-  _globals['_RESETRESPONSE_INFOENTRY']._serialized_end=195
-  _globals['_STEPREQUEST']._serialized_start=197
-  _globals['_STEPREQUEST']._serialized_end=226
-  _globals['_STEPRESPONSE']._serialized_start=229
-  _globals['_STEPRESPONSE']._serialized_end=414
-  _globals['_STEPRESPONSE_INFOENTRY']._serialized_start=152
-  _globals['_STEPRESPONSE_INFOENTRY']._serialized_end=195
-  _globals['_CLOSEREQUEST']._serialized_start=416
-  _globals['_CLOSEREQUEST']._serialized_end=430
-  _globals['_CLOSERESPONSE']._serialized_start=432
-  _globals['_CLOSERESPONSE']._serialized_end=481
-  _globals['_SIMULATIONSERVICE']._serialized_start=484
-  _globals['_SIMULATIONSERVICE']._serialized_end=686
+  _globals['_RESETREQUEST']._serialized_end=76
+  _globals['_RESETRESPONSE']._serialized_start=79
+  _globals['_RESETRESPONSE']._serialized_end=211
+  _globals['_RESETRESPONSE_INFOENTRY']._serialized_start=168
+  _globals['_RESETRESPONSE_INFOENTRY']._serialized_end=211
+  _globals['_STEPREQUEST']._serialized_start=213
+  _globals['_STEPREQUEST']._serialized_end=258
+  _globals['_STEPRESPONSE']._serialized_start=261
+  _globals['_STEPRESPONSE']._serialized_end=446
+  _globals['_STEPRESPONSE_INFOENTRY']._serialized_start=168
+  _globals['_STEPRESPONSE_INFOENTRY']._serialized_end=211
+  _globals['_CLOSEREQUEST']._serialized_start=448
+  _globals['_CLOSEREQUEST']._serialized_end=478
+  _globals['_CLOSERESPONSE']._serialized_start=480
+  _globals['_CLOSERESPONSE']._serialized_end=529
+  _globals['_SIMULATIONSERVICE']._serialized_start=532
+  _globals['_SIMULATIONSERVICE']._serialized_end=734
 # @@protoc_insertion_point(module_scope)

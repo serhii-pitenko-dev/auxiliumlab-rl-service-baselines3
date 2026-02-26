@@ -115,14 +115,17 @@ class GrpcExternalEnvAdapter(ExternalEnvAdapter):
     Connects to the .NET SimulationService and forwards reset/step/close calls.
     """
     
-    def __init__(self, grpc_endpoint: str):
+    def __init__(self, grpc_endpoint: str, gym_id: str = ""):
         """
         Initialize the gRPC adapter.
         
         Args:
-            grpc_endpoint: Address of the .NET simulation gRPC server (e.g., "localhost:50051")
+            grpc_endpoint: Address of the .NET simulation gRPC server (e.g., "localhost:50062")
+            gym_id: UUID string identifying this gym on the .NET side.
+                    Must match the GymId assigned by Sb3Actions in .NET.
         """
         self.grpc_endpoint = grpc_endpoint
+        self.gym_id = gym_id
         self._channel = None
         self._stub = None
         self._connect()
@@ -165,8 +168,8 @@ class GrpcExternalEnvAdapter(ExternalEnvAdapter):
         from generated import simulation_pb2
         
         try:
-            request = simulation_pb2.ResetRequest(seed=seed if seed is not None else 0)
-            response = self._stub.Reset(request, timeout=10)
+            request = simulation_pb2.ResetRequest(gym_id=self.gym_id, seed=seed if seed is not None else 0)
+            response = self._stub.Reset(request, timeout=60)  # 60s: first episode startup can be slow
             
             observation = np.array(response.observation, dtype=np.float32)
             logger.debug(f"Reset completed. Observation shape: {observation.shape}")
@@ -190,8 +193,8 @@ class GrpcExternalEnvAdapter(ExternalEnvAdapter):
         from generated import simulation_pb2
         
         try:
-            request = simulation_pb2.StepRequest(action=action)
-            response = self._stub.Step(request, timeout=10)
+            request = simulation_pb2.StepRequest(gym_id=self.gym_id, action=action)
+            response = self._stub.Step(request, timeout=30)
             
             observation = np.array(response.observation, dtype=np.float32)
             reward = float(response.reward)
@@ -216,7 +219,7 @@ class GrpcExternalEnvAdapter(ExternalEnvAdapter):
         
         try:
             if self._stub is not None:
-                request = simulation_pb2.CloseRequest()
+                request = simulation_pb2.CloseRequest(gym_id=self.gym_id)
                 response = self._stub.Close(request, timeout=5)
                 logger.info(f"Simulation closed: {response.message}")
         except grpc.RpcError as e:

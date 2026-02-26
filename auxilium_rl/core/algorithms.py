@@ -38,6 +38,18 @@ def build_model(
     # Merge with provided hyperparameters
     params = {**defaults, **hyperparameters}
     
+    # n_envs is sent by the .NET orchestrator to let Python know how many parallel
+    # gym environments are running on the .NET side. It is NOT a SB3 model
+    # constructor argument — parallel envs are managed by .NET (one Sb3Actions per
+    # executor), so we just log it and remove it before passing params to the model.
+    n_envs = params.pop("n_envs", None)
+    if n_envs is not None:
+        logger.info(f"Parallel .NET gym environments: {n_envs} (managed by .NET side)")
+
+    # gym_ids is a semicolon-separated list of UUID strings identifying the .NET gym
+    # instances. It is routing metadata — not an SB3 constructor argument.
+    params.pop("gym_ids", None)
+    
     logger.info(f"Building {algorithm.value.upper()} model with params: {params}")
     
     if algorithm == AlgorithmType.PPO:

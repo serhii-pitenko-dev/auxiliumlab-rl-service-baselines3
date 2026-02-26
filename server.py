@@ -3,8 +3,15 @@ Server entry point for the RL Training Service.
 
 This script starts the gRPC server and handles graceful shutdown.
 """
-import signal
 import sys
+import os
+
+# The gRPC-generated stubs use flat imports (e.g. `import policy_trainer_pb2`)
+# rather than package-qualified ones. Add the generated/ directory to sys.path
+# so Python can resolve those imports regardless of the working directory.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "generated"))
+
+import signal
 import logging
 
 from auxilium_rl.infra.config import ServiceConfig, EnvConfig
@@ -45,7 +52,7 @@ def main():
         orchestrator=orchestrator,
         model_store=model_store,
         config=service_config,
-        adapter_factory=lambda: GrpcExternalEnvAdapter("localhost:50062")  # Connect to C# SimulationService
+        adapter_factory=lambda gym_id: GrpcExternalEnvAdapter("localhost:50062", gym_id=gym_id)  # Connect to C# SimulationService
     )
     
     # Setup signal handlers for graceful shutdown
